@@ -152,7 +152,7 @@ class TQDM(Callback):
             if k.endswith('metric'):
                 log_data[k.split('_metric')[0]] = '%.02f' % v
             else:
-                 log_data[k] = v
+                log_data[k] = v
         self.progbar.set_postfix(log_data)
         self.progbar.update()
         self.progbar.close()
@@ -312,7 +312,7 @@ class ModelCheckpoint(Callback):
                                 loss='%0.4f'%logs[self.monitor])
         if self.save_best_only:
             current_loss = logs.get(self.monitor)
-            if current_loss is None:
+            if not current_loss:
                 pass
             else:
                 if current_loss < self.best_loss:
@@ -381,10 +381,11 @@ class EarlyStopping(Callback):
     def on_train_begin(self, logs=None):
         self.wait = 0
         self.best_loss = 1e15
+        self.trainer._stop_training = False
 
     def on_epoch_end(self, epoch, logs=None):
         current_loss = logs.get(self.monitor)
-        if current_loss is None:
+        if not current_loss:
             pass
         else:
             if (current_loss - self.best_loss) < -self.min_delta:
@@ -519,7 +520,7 @@ class ReduceLROnPlateau(Callback):
         logs = logs or {}
         logs['lr'] = [p['lr'] for p in self.trainer._optimizer.param_groups]
         current_loss = logs.get(self.monitor)
-        if current_loss is None:
+        if not current_loss:
             pass
         else:
             # if in cooldown phase

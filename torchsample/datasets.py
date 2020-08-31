@@ -9,7 +9,7 @@ import fnmatch
 import numpy as np
 import pandas as pd
 import PIL.Image as Image
-import nibabel
+# import nibabel
 
 import torch as th
 
