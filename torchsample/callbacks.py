@@ -508,10 +508,13 @@ class ReduceLROnPlateau(Callback):
         """
         Reset the wait and cooldown counters
         """
-        self.monitor_op = lambda a, b: (a - b) < -self.epsilon
+        # self.monitor_op = lambda a, b: (a - b) < -self.epsilon
         self.best_loss = 1e15
         self.cooldown_counter = 0
         self.wait = 0
+
+    def monitor_op(self, a, b):
+        return (a - b) < -self.epsilon
 
     def on_train_begin(self, logs=None):
         self._reset()
