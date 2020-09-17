@@ -295,6 +295,7 @@ class ModuleTrainer(object):
                 callback_container.on_epoch_end(epoch_idx, epoch_logs)
 
                 if self._stop_training:
+                    callback_container.on_train_end()
                     break
         self.model.train(mode=False)
 

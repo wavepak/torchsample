@@ -74,8 +74,6 @@ class CallbackContainer(object):
 
     def on_train_end(self, logs=None):
         logs = logs or {}
-        logs['final_loss'] = self.trainer.history.epoch_losses[-1],
-        logs['best_loss'] = min(self.trainer.history.epoch_losses),
         logs['stop_time'] = _get_current_time()
         for callback in self.callbacks:
             callback.on_train_end(logs)
@@ -353,7 +351,8 @@ class EarlyStopping(Callback):
     def __init__(self, 
                  monitor='val_loss',
                  min_delta=0,
-                 patience=5):
+                 patience=5,
+                 restore_best_weights=True):
         """
         EarlyStopping callback to exit the training loop if training or
         validation loss does not improve by a certain amount for a certain
@@ -376,6 +375,8 @@ class EarlyStopping(Callback):
         self.wait = 0
         self.best_loss = 1e-15
         self.stopped_epoch = 0
+        self.restore_best_weights = restore_best_weights
+        self.best_weights = {}
         super(EarlyStopping, self).__init__()
 
     def on_train_begin(self, logs=None):
@@ -391,16 +392,21 @@ class EarlyStopping(Callback):
             if (current_loss - self.best_loss) < -self.min_delta:
                 self.best_loss = current_loss
                 self.wait = 1
+                # Save best model for restore best weights
+                if self.restore_best_weights:
+                    self.best_weights = {'epoch': epoch+1, 'state_dict':self.trainer.model.state_dict()}
             else:
                 if self.wait >= self.patience:
                     self.stopped_epoch = epoch + 1
                     self.trainer._stop_training = True
                 self.wait += 1
 
-    def on_train_end(self, logs):
+    def on_train_end(self, logs=None):
         if self.stopped_epoch > 0:
-            print('\nTerminated Training for Early Stopping at Epoch %04i' % 
-                (self.stopped_epoch))
+            print(f'Terminated training for early stopping at Epoch {self.stopped_epoch:04d}')
+        if self.restore_best_weights:
+            self.trainer.model.load_state_dict(self.best_weights['state_dict'])
+            print(f"Restored model weights from the best round at Epoch {self.best_weights['epoch']:04d}")
 
 
 class LRScheduler(Callback):
@@ -501,10 +507,11 @@ class ReduceLROnPlateau(Callback):
         self.cooldown_counter = 0
         self.wait = 0
         self.best_loss = 1e15
+        self.init_lrs = None
         self._reset()
         super(ReduceLROnPlateau, self).__init__()
 
-    def _reset(self):
+    def _reset(self, init_lrs=False):
         """
         Reset the wait and cooldown counters
         """
@@ -512,12 +519,19 @@ class ReduceLROnPlateau(Callback):
         self.best_loss = 1e15
         self.cooldown_counter = 0
         self.wait = 0
+        # Restore initial lrs
+        if init_lrs:
+            if not self.init_lrs:
+                self.init_lrs = [p['lr'] for p in self.trainer._optimizer.param_groups]
+            else:
+                for idx, p in enumerate(self.trainer._optimizer.param_groups):
+                    p['lr'] = self.init_lrs[idx]
 
     def monitor_op(self, a, b):
         return (a - b) < -self.epsilon
 
     def on_train_begin(self, logs=None):
-        self._reset()
+        self._reset(init_lrs=True)
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
